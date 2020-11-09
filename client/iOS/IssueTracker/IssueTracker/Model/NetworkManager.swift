@@ -9,26 +9,31 @@ import Foundation
 import Alamofire
 
 struct RequestType<T: Codable> {
+    var url: String {
+        guard let id = self.id else {
+            return baseUrl + endPoint + "/"
+        }
+        return "\(baseUrl)\(endPoint)/\(id)"
+    }
     var baseUrl: String = "http://49.50.173.66/api/"
     let endPoint: String
     let method: HTTPMethod
     let parameters: T?
+    var id: Int? = nil
+}
+
+struct IssueResponse: Codable {
+    let numOfaffectedRows: Int
 }
 
 public class NetworkManager {
     
     func request<T: Codable, U: Codable> (type: RequestType<T>,
                         completion: @escaping (U) -> Void) {
-        switch type.method {
-        case .get:
-            getData(type: type, completion: completion)
-        case .post:
-            postData(type: type, completion: completion)
-        case .patch:
-            patchData()
-        default:
-            return
-        }
+        let alamo = AF.request(type.url,
+                               method: type.method,
+                               parameters: type.parameters).validate(statusCode: 200..<300)
+        processRequest(alamo: alamo, completion: completion)
         
     }
     
@@ -50,27 +55,6 @@ public class NetworkManager {
                 print(error)
             }
         }
-    }
-    
-    private func getData<T: Decodable, U: Decodable> (type: RequestType<T>,
-                         completion: @escaping (U) -> Void) {
-        let url = type.baseUrl + type.endPoint
-        let alamo = AF.request(url, method: .get).validate(statusCode: 200..<300)
-        processRequest(alamo: alamo, completion: completion)
-    }
-    
-    private func postData<T: Encodable, U: Decodable> (type: RequestType<T>,
-                          completion: @escaping (U) -> Void) {
-        let url = type.baseUrl + type.endPoint
-        let alamo = AF.request(url,
-                               method: .post,
-                               parameters: type.parameters,
-                               encoder: JSONParameterEncoder.default).validate(statusCode: 200..<300)
-        processRequest(alamo: alamo, completion: completion)
-    }
-    
-    private func patchData() {
-        
     }
     
 }

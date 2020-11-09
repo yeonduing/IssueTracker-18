@@ -20,6 +20,7 @@ class IssueListViewController: UIViewController, UICollectionViewDelegate {
     
     // MARK: - Properties
     private lazy var dataSource = createDataSource()
+    private let api = NetworkManager()
 
     //MARK: - Value Types
     typealias IssueDataSource = UICollectionViewDiffableDataSource<Section, Issue>
@@ -75,7 +76,6 @@ class IssueListViewController: UIViewController, UICollectionViewDelegate {
     }
     
     private func dataSourceUpdateFromNetwork() {
-        let api = NetworkManager()
         let parameters: Issue? = nil
         api.request(type: RequestType(endPoint: "issue", method: .get, parameters: parameters)) { [self] (data: [Issue]) in
             var snapshot = NSDiffableDataSourceSnapshot<Section, Issue>()
@@ -86,8 +86,56 @@ class IssueListViewController: UIViewController, UICollectionViewDelegate {
     }
     
     private func createLayout() -> UICollectionViewLayout {
-        let configuration = UICollectionLayoutListConfiguration(appearance: .plain)
+        var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
+        configuration.trailingSwipeActionsConfigurationProvider = { [weak self] (indexPath) in
+            guard let self = self else { return nil }
+            guard let issue = self.dataSource.itemIdentifier(for: indexPath) else { return nil }
+            return self.trailingSwipeActionConfigurationForListCellItem(issue)
+        }
+        
         return UICollectionViewCompositionalLayout.list(using: configuration)
+    }
+    
+    func trailingSwipeActionConfigurationForListCellItem(_ issue: Issue) -> UISwipeActionsConfiguration? {
+        var closeParameters = issue
+        closeParameters.isOpen = !issue.isOpen
+        let closeRequestType = RequestType(endPoint: "issue",
+                                      method: .patch,
+                                      parameters: closeParameters,
+                                      id: issue.id)
+        let closeAction = createAction(title: "Close",
+                                        issue: issue,
+                                        requestType: closeRequestType,
+                                        response: IssueResponse(numOfaffectedRows: 0))
+        closeAction.backgroundColor = .systemGreen
+        
+        let deleteParameters: Issue? = nil
+        let deleteRequestType = RequestType(endPoint: "issue",
+                                      method: .delete,
+                                      parameters: deleteParameters,
+                                      id: issue.id)
+        let deleteAction = createAction(title: "Delete",
+                                        issue: issue,
+                                        requestType: deleteRequestType,
+                                        response: IssueResponse(numOfaffectedRows: 0))
+        deleteAction.backgroundColor = .systemRed
+        return UISwipeActionsConfiguration(actions: [deleteAction, closeAction])
+    }
+    
+    private func createAction<T: Codable, U: Codable> (title: String, issue: Issue, requestType: RequestType<T>, response: U) -> UIContextualAction {
+        let action = UIContextualAction(style: .normal, title: title) {
+            [weak self] (_, _, completion) in
+            guard let self = self else {
+                completion(false)
+                return
+            }
+            self.api.request(type: requestType) { [weak self] (data: U) in
+                print(data)
+                self?.dataSourceUpdateFromNetwork()
+            }
+            completion(true)
+        }
+        return action
     }
     
 }
